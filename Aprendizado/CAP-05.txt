@@ -1,0 +1,174 @@
+- Nesse último capítulo falamos sobre: Alta Disponibilidade:
+
+
+- No capítulo anterior aprendemos a enviar um Evento que passou por erro/falha para uma fila morta (DLQ). Mas até o momento o evento que cai nela
+fica lá paradinho. Podemos fazer diversas coisas (via código ou manualmente via RabbitMq Server ou Plugins), por exemplo: consumir esses eventos 
+e persistir no banco, consumir esses eventos por uma aplicação de Log, reencaminhar esse evento para outra fila, entre outros... 
+
+
+- Mexendo nos Eventos de uma DLQ via RabbitMq Server, siga os passos:
+
+	1) Entrar em localhost:15672 (RabbitMq Server);
+	
+	2) Ir na opção Queues -> Entrar na DLQ -> Ir na opção Move messages. 
+	Mas para poder mover uma mensagem, temos que habilitar dois plugins: RabbitMQ Shovel e o RabbitMQ Shovel Management.
+	
+	Para habilitá-los tivemos que executar o seguinte comando dentro do terminal do Container Docker do RabbitMq:
+	
+		rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management
+		
+	3) Agora na opção Move message podemos escrever para onde queremos enviar a mensagem, basta escrever no campo Destination queue o nome da fila
+	de destino. Lembre-se de parar o programa antes de fazer isso (o consumidor que simula erro, pois sem isso a Mensagem vai cair rapido na fila
+	nova, mas vai dar erro e vai sem encaminhada para DLQ...)
+	O destino do evento será: pagamentos.detalhes-avaliacao
+	
+	4) Vamos no programa Avaliacao, e no trecho que simula o erro/falha devemos alterar para dar erro apenas em Pagamento com número 0001. 
+	Isso que fizemos representa a correção de algo que gerava falha, dessa forma podemos sempre mover um evento em DLQ e o fluxo volta a funcionar...
+	(Esse passo deveria ser feito antes mesmo do passo 3...)
+	
+
+- O Plugin de Shovel é muito utilizado quando queremos consumir o Evento de uma fila e já publicá-lo em outra fila. Podemos até automatiar isso.
+Para saber mais, consulte as documentações:
+	
+	https://www.rabbitmq.com/shovel.html
+	https://www.rabbitmq.com/shovel-dynamic.html
+
+Lembre-se que há dois tipos de Shovel, estático e dinâmico. O estático é o que é declarado via arquivo de configuração e deve ser criado/atualizado 
+antes que o nó seja inicializado para ter as configurações válidas. O dinâmico é definido através de parâmetros em tempo de execução. 
+
+
+- Criando Cluster:
+
+	- Um Cluster tem um papel muito importante na comunicação entre os Microserviços! E cabe a nós garantir um High Availability 
+	(em português, "alta disponibilidade"). E uma boa prática é ter um Cluster (Conjunto de várias máquinas) rodando o RabbitMq!
+	
+	- Há diversas maneiras de criar um Cluster do RabbitMq, na própria documentação (https://www.rabbitmq.com/clustering.html) há dicas de como 
+	fazer esse cluster via Kubernetes, AWS (com	instâncias EC2), com Consul, manualmente, entre outros...
+	
+	- Vamos criar esse Cluster de maneira manual (ulizando rabbitmqctl), siga os passos:
+	
+		1) Abra o terminal e crie uma rede (network) chamada alura. Para isso rode o comando:
+		
+			docker network create alura
+			
+		2) Agora vamos criar 3 containers do RabbitMq, todos devem estar na rede alura. Cada um tem que estar em porta diferente.
+		Além da rede, todos containers tem que ter mais uma coisa em comum, no caso o valor de RABBITMQ_ERLANG_COOKIE.
+		Aqui o nosso valor será alura_secret (Normalmente seu valor é passado via arquivo, mas aqui vamos usar via variável de ambiente)
+				
+		Execute no terminal (um de cada vez) os comandos:
+		
+			docker run -d --rm --net alura --hostname rabbit1 --name rabbit1 -p 8085:15672 -e RABBITMQ_ERLANG_COOKIE=alura_secret rabbitmq:3.10-management
+
+			docker run -d --rm --net alura --hostname rabbit2 --name rabbit2 -p 8086:15672 -e RABBITMQ_ERLANG_COOKIE=alura_secret rabbitmq:3.10-management
+			
+			docker run -d --rm --net alura --hostname rabbit3 --name rabbit3 -p 8087:15672 -e RABBITMQ_ERLANG_COOKIE=alura_secret rabbitmq:3.10-management
+		
+		3) Agora abra 3 abas do navegador, cada um com:
+		
+			localhost:8085
+			localhost:8086
+			localhost:8087
+			
+		Os três containers ainda não estão em um Cluster! Cada Contaienr por enquanto está separado um do outro!
+				
+		4) Cada container do RabbitMq ganhou um nome, o primeiro se chama rabbit1. Vamos fazer o rabbit2 e o rabbit3 se juntarem com rabbit1.
+		Mas para isso ser possível, precisamos entrar no container (no rabbit2 e rabbit3) e parar o RabbitMq. O comando para isso é:
+		
+			docker exec -it rabbit2 rabbitmqctl stop_app (esse comando é no terminal normal, se ja abrir o do container via docker desktop é so rodar
+			rabbitmqctl stop_app)
+			
+		Com o container parado, precisamos agora resetar a configuração do rabbit2. Comando para isso:
+		
+			docker exec -it rabbit2 rabbitmqctl reset
+			
+		Agora vamos fazer o rabbit2 se juntar com rabit1, para isso devemos rodar:
+		
+			docker exec -it rabbit2 rabbitmqctl join_cluster rabbit@rabbit1
+			
+		Nesse comando obtive uns alertas de erro, mas a junção ocorreu!
+			
+		Agora já podemos dar start novamente na aplicação do RabbitMq, para isso rode:
+		
+			docker exec -it rabbit2 rabbitmqctl start_app
+			
+		5) Repita o passo 4, mas agora entrando no container do rabbit3 (lembre-se que onde usava rabbit2 será rabbit3)
+			
+		6) Agora se entrarmos no localhost:8085 (ou em qualquer porta) veremos que temos 3 nodes de RabbitMq formando um cluster. 
+		
+		7) Entre no node2 (poderia ser em qualquer um, é apenas teste). Vamos criar uma fila. Entre em Queues e na opção Add a new queue vamos
+		criar a fila de nome fila_rabbit2. Temos ainda que escolher em qual node vamos criar a fila, no caso vamos escolher rabbit2.
+		
+		8) Vamos entrar na fila_rabbit2 e vamos criar uma mensagem com o conteúdo: Teste de mensagens para a fila do rabbit2.
+		Veremos que a mensagem foi para a fila rabbit2 que está no node2! Vamos parar a aplicação do rabbitmq do container rabbit2 (isso é para
+		simular que o nó caiu) e logo após vamos subi-lo novamente. Veremos que a mensagem foi perdida!!!! Ou seja, o cluster ainda não prove a
+		alta disponibilidade!
+		
+		Comando para parar e para subir o né:
+		
+			docker exec -it rabbit2 rabbitmqctl stop_app
+			docker exec -it rabbit2 rabbitmqctl start_app
+
+
+- Replicando as mensagens entre os nós para garantir a Alta Disponibilidade. Siga os passos:
+
+	1) Já temos o Cluster, mas ainda perdemos a mensagem se um nó cair, ou seja, estamos sem resiliência. Para resolver isso, temos que criar uma
+	política! Tem diversas maneiras para se fazer isso, vai depender muito da maneira que você criou o Cluster.
+	
+	2) A criação de nossa política seria via RabbitMq Server (a do cluster). Então, devemos acessar o http://localhost:8085 -> Entrar na aba Admin ->
+	Clicar na Opção Policies -> Na seção Add / update a policy temos que criar a seguinte Policy:
+		
+		Name: ha                        	(É o nome que vamos dar)
+		Pattern: .*							(Valor indica que vamos aplicar a policy nas filas e mensagens)
+		Apply to: Echanges and queues		(Escolho onde vou aplicar)
+		Priority:							(Valor ficou vazio)
+		Definition: ha-mode = all			(Aqui ha-mode vai no primeiro input, e all no segundo. Os valores do primeiro pode ser as opções que vem em baixo, basta clicar)
+	
+	
+	-> Por fim, basta clicar no botão Add / update policy.
+	
+	3) Podemos ir na aba Queues agora e no Node da fila veremos um "+2" que indica que a mensagem que cai ali é replicada em mais duas filas!
+	
+	4) Para testar agora, podemos publicar no segundo nó (pode ser em qualquer um, mas vamos pegar esse para testar), a publicação pode ser via
+	RabbitMq Server e após publicar podemos parar o nó (container) número 2 com o comando:
+	
+	
+		docker exec -it rabbit2 rabbitmqctl stop_app
+		
+	Após parar, automaticamente a mensagem que publicamos tem que ir para outro nó/fila disponível!
+	
+
+- Tenha em mente que temos que achar o valor de equilíbrio na replicação (na verdade usamos o espelhamento - Mirrored Queues) de mensagem! 
+Fazer o evento se replicar em todos nós pode comprometer o desempenho!
+
+E para sabermos a diferença entre Mirrored queues e Quorum queues, acesse: https://cursos.alura.com.br/course/microsservicos-pratica-mensageria-rabbitmq/task/114878
+Ou leia aqui:	
+	
+Nesta aula, vimos a implementação de mirrored queues, que são filas espelhadas. Essas filas funcionam da seguinte forma: elas possuem uma fila primária em um dos nós do cluster, e o espelhamento ocorre em um ou mais membros desse cluster. As mensagens publicadas na fila primeiro acessam o nó primário (onde a fila foi originalmente criada) e, em seguida, são replicadas para os espelhos. Se algo acontecer com o nó primário, o espelho sincronizado mais antigo será promovido a primário. Existe uma projeção de desativar esse recurso a partir da versão 4.0 do RabbitMQ, que ainda não há previsão de liberação, para que sejam priorizadas as quorum queues. Isso porque o algoritmo que faz esse espelhamento é considerado ineficiente e pode sofrer alguns problemas de sincronização e performance.
+
+Um dos grandes problemas citados é que quando uma das instâncias fica offline e depois retorna, os dados que estavam espalhados são perdidos. E aí é necessário decidir se vai novamente sincronizar e pegar as filas e mensagens do nó primário ou não. Quando se opta por sincronizar novamente as filas e mensagens, nesse período de sincronização a fila primária fica indisponível, pois a sincronização é bloqueante. Quando o fluxo está ocorrendo bem, publicação e consumo acontecendo de forma rápida, essa sincronização não gera um impacto perceptível. Mas quando há acúmulo de muitas mensagens na fila, pode ser um problema.
+
+Para tratar essas questões, a partir da versão 3.8 do RabbitMQ foram lançadas as quorum queues, ou filas de quorum, usando o algoritmo de consenso Raft, para promover uma melhor performance em relação às filas espelhadas e garantir a segurança das mensagens. Nessa abordagem, determina-se que deve haver um quorum mínimo de réplicas disponíveis. No caso do nosso exemplo, temos três nós com os dados. Se dois ficassem indisponíveis, a fila também já ficaria indisponível para os clientes, por não ter um quorum mínimo para replicação e segurança das mensagens. Quando um produtor publica uma mensagem, a fila só confirma o recebimento uma vez que a maioria das réplicas confirmam o recebimento e armazenamento do dado em disco.
+
+Na documentação do RabbitMQ tem uma página exclusiva sobre quorum queues, detalhando o funcionamento e as principais diferenças das filas espelhadas. Abaixo segue uma tabela, retirada do site, com algumas das principais diferenças:
+
+Feature 					| Classic Mirrored  | Quorum
+Non-durable queues			| yes				| no
+Exclusivity					| yes				| no
+Per message persistence		| per message		| always
+Membership changes			| automatic			| manual
+Message TTL (Time-To-Live)  | yes 				| yes (since 3.10)
+Queue TTL					| yes				| yes
+Queue length limits			| yes				| yes (except x-overflow reject-publish-dlx)
+Lazy behaviour				| yes				| always (since 3.10) or through the Memory Limit feature (before 3.10)
+Message priority			| yes 				| no
+Consumer priority			| yes				| yes
+Dead letter exchanges		| yes				| yes
+Adheres to policies			| yes				| yes
+Poison message handling		| no 				| yes
+Global QoS Prefetch			| yes				| no
+
+Cada uma dessas diferenças é detalhada na documentação oficial disponível no site do RabbitMQ.
+
+
+- Nos exercícios, descobrimos que só é possível replicar mensagens quando juntamos os nós em um único Cluster! E se todos os nos cairem a mensagem
+será perdida, isso no nosso caso, pois não estamos salvando as mensagens em um banco de dados...

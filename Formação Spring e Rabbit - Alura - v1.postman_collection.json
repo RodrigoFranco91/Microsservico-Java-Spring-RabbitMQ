@@ -1,0 +1,585 @@
+{
+	"info": {
+		"_postman_id": "9c71d0ba-d950-4105-8f47-4fa7198e25ca",
+		"name": "Formação Spring e Rabbit - Alura - v1",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "7432046"
+	},
+	"item": [
+		{
+			"name": "MS PAGAMENTOS",
+			"item": [
+				{
+					"name": "Listando todos Pagamentos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8080/pagamentos",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pagamentos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listando um Pagamento",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8080/pagamentos/1",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pagamentos",
+								"1"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deletando um Pagamento",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "localhost:8080/pagamentos/1",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pagamentos",
+								"1"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizando um Pagamento Copy",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"valor\": 1000,\r\n    \"nome\": \"Rodrigo\",\r\n    \"numero\": \"12345678\",\r\n    \"expiracao\": \"10/29\",\r\n    \"codigo\": \"123\",\r\n    \"pedidoId\": 1,\r\n    \"status\": \"CRIADO\",\r\n    \"formaDePagamentoId\": 1\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:8080/pagamentos/2",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pagamentos",
+								"2"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "localhost:8080/pagamentos",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"valor\": 500,\r\n    \"nome\": \"Jacqueline\",\r\n    \"numero\": \"12345678\",\r\n    \"expiracao\": \"10/29\",\r\n    \"codigo\": \"123\",\r\n    \"pedidoId\": 1,\r\n    \"formaDePagamentoId\": 1\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:8080/pagamentos",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pagamentos"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Service Registry",
+			"item": [
+				{
+					"name": "Visualizar Instancias",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "MS PEDIDOS",
+			"item": [
+				{
+					"name": "Via aws",
+					"item": [
+						{
+							"name": "Criando um Pedido - Via AWS",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://Servi-Alura-13SQRYEMZ0BCA-848877712.us-east-1.elb.amazonaws.com:8080/pedidos",
+									"protocol": "http",
+									"host": [
+										"Servi-Alura-13SQRYEMZ0BCA-848877712",
+										"us-east-1",
+										"elb",
+										"amazonaws",
+										"com"
+									],
+									"port": "8080",
+									"path": [
+										"pedidos"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Listando todos os Pedidos  - Via AWS",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "http://Servi-Alura-16NHAWH3GQ745-761931720.us-east-1.elb.amazonaws.com:8080/pedidos",
+									"protocol": "http",
+									"host": [
+										"Servi-Alura-16NHAWH3GQ745-761931720",
+										"us-east-1",
+										"elb",
+										"amazonaws",
+										"com"
+									],
+									"port": "8080",
+									"path": [
+										"pedidos"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Criando um Pedido",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:8080/pedidos",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pedidos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listando todos os Pedidos",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:55606/pedidos",
+							"host": [
+								"localhost"
+							],
+							"port": "55606",
+							"path": [
+								"pedidos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listando todos os Pedidos Copy",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:8080/pedidos",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"pedidos"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Via Gateway",
+			"item": [
+				{
+					"name": "MS PEDIDOS",
+					"item": [
+						{
+							"name": "Criando um Pedido",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "localhost:8082/pedidos-ms/pedidos",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pedidos-ms",
+										"pedidos"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Listando todos os Pedidos",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "localhost:8082/pedidos-ms/pedidos",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pedidos-ms",
+										"pedidos"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Teste para ver qual Instancia responde a request",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"itens\": [\r\n        {\r\n            \"quantidade\": 10,\r\n            \"descrição\": \"Coca-cola\"\r\n        },\r\n        {\r\n            \"quantidade\": 5,\r\n            \"descrição\": \"Mc Chicken\"\r\n        }\r\n    ]\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "localhost:8082/pedidos-ms/pedidos/porta",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pedidos-ms",
+										"pedidos",
+										"porta"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "MS PAGAMENTOS",
+					"item": [
+						{
+							"name": "Listando todos Pagamentos",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Listando um Pagamento",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos/2",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos",
+										"2"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Deletando um Pagamento",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos/1",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos",
+										"1"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Atualizando um Pagamento Copy",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"valor\": 1000,\r\n    \"nome\": \"Rodrigo\",\r\n    \"numero\": \"12345678\",\r\n    \"expiracao\": \"10/29\",\r\n    \"codigo\": \"123\",\r\n    \"pedidoId\": 1,\r\n    \"status\": \"CRIADO\",\r\n    \"formaDePagamentoId\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos/2",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos",
+										"2"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "localhost:8080/pagamentos",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"valor\": 500,\r\n    \"nome\": \"Jacqueline\",\r\n    \"numero\": \"12345678\",\r\n    \"expiracao\": \"10/29\",\r\n    \"codigo\": \"123\",\r\n    \"pedidoId\": 1,\r\n    \"formaDePagamentoId\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "localhost:8080/pagamentos Copy",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"valor\": 500,\r\n    \"nome\": \"Jacqueline\",\r\n    \"numero\": \"000\",\r\n    \"expiracao\": \"10/29\",\r\n    \"codigo\": \"123\",\r\n    \"pedidoId\": 1,\r\n    \"formaDePagamentoId\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Confirmar Pagamento",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"url": {
+									"raw": "localhost:8082/pagamentos-ms/pagamentos/2/confirmar",
+									"host": [
+										"localhost"
+									],
+									"port": "8082",
+									"path": [
+										"pagamentos-ms",
+										"pagamentos",
+										"2",
+										"confirmar"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		}
+	]
+}

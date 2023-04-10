@@ -1,0 +1,25 @@
+version: "3.6"
+
+services:
+    rabbitmq:
+        image: rabbitmq:3.10-management
+        container_name: container-rabbitmq
+        restart: always
+        ports:
+            - 5672:5672
+            - 15672:15672
+        volumes:
+            - ./dados:/var/lib/rabbitmq/
+        environment:
+            - RABBITMQ_DEFAULT_USER=guest
+            - RABBITMQ_DEFAULT_PASS=guest
+
+    banco:
+        image: mysql
+        command: --default-authentication-plugin=mysql_native_password
+        container_name: container-banco
+        environment:
+            MYSQL_ROOT_PASSWORD: mysql
+            MYSQL_DATABASE: alurafood-pagamento
+        ports:
+            - 3310:3306

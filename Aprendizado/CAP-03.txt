@@ -1,0 +1,303 @@
+- Nesse terceiro capítulo vamos tratar de uma maneira melhor a mensagem, tanto na escrita quanto na leitura.
+
+
+- Vamos alterar o Producer, para a mensagem ser escrita em JSON (O json vai representar um Pagamento de fato). Siga os passos:
+
+	1) Abra o nosso projeto Pagamento, pois ele é o nosso producer;
+	
+	2) Lembre-se que no capítulo anterior usamos o método send() do RabbitTemplate para enviar a mensagem. Podemos fazer um teste agora com o
+	método convertAndSend() e passar como argumento o próprio objeto de pagamento (no caso PagamentoDto). Mas veremos que isso vai falhar, pois esse 
+	método não sabe como converter para um tipo que nós criamos, pois a classe PagamentoDto foi feita por nós! 
+	
+	O objeto RabbitTemplate usa por padrão a classe SimpleMessageConverter para converter os tipos, e para Json ele não serve. Para JSON devemos usar
+	Jackson2JsonMessageConverter, essa classe já vem na nossa dependencia do amqp que foi adicionada no pom.xml.
+	
+	3) Para passarmos a usar a classe Jackson2JsonMessageConverter, devemos alterar a nossa classe de configuração, no caso a PagamentoAMQPConfiguration.
+	Basta adicionar:
+	
+		@Bean
+		public Jackson2JsonMessageConverter messageConverter(){
+			return  new Jackson2JsonMessageConverter();
+		}
+		
+	4) Mas apenas com o passo anterior, o RabbitTemplate não passa a usar a classe Jackson2JsonMessageConverter. Temos agora que ensinar o Spring
+	a Injetar um RabbitTemplate com essa configuração nova. Para isso basta criar um novo Bean para o RabbitTemplate, veja:
+	
+		@Bean
+		public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, Jackson2JsonMessageConverter messageConverter){
+			RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
+			rabbitTemplate.setMessageConverter(messageConverter);
+			return  rabbitTemplate;
+		}
+		
+	Esse Bean ficará também na classe de configuração, no caso PagamentoAMQPConfiguration.
+	
+	5) Agora sim podemos repetir o passo 2, ou seja, passar a usar o método convertAndSend(). Veja como ficará o método cadastra() da classe
+	PagamentoController, que é onde escrevemos na fila:
+	
+		@PostMapping
+		public ResponseEntity<PagamentoDto> cadastrar(@RequestBody @Valid PagamentoDto dto, UriComponentsBuilder uriBuilder) {
+			PagamentoDto pagamento = service.criarPagamento(dto);
+			URI endereco = uriBuilder.path("/pagamentos/{id}").buildAndExpand(pagamento.getId()).toUri();
+
+			template.convertAndSend("pagamento.concluido", pagamento);
+
+			return ResponseEntity.created(endereco).body(pagamento);
+		}
+		
+	6) Rode o programa, chame o método @POST de pagamento e veja se PagamentoDto foi escrito na fila!
+	
+	
+- Vamos alterar o Subscriber, para a mensagem ser lida em JSON que será convertido em um PagamentoDto. Siga os passos:
+
+	1) Abra o nosso projeto Pedidos, pois ele é o nosso Subscriber;
+	
+	2) Nesse projeto, não temos a classe PagamentoDto, então vamos criar no pacote dto a classe PagamentoDto (Copiados do projeto Pagamento para
+	o projeto Pedidos) ficará assim:
+	
+		@Getter
+		@Setter
+		public class PagamentoDto {
+
+			private Long id;
+			private BigDecimal valor;
+			private String nome;
+			private String numero;
+			private String expiracao;
+			private String codigo;
+			private Status status;
+			private Long pedidoId;
+			private Long formaDePagamentoId;
+		}
+
+	Preste atenção nesse ponto! No projeto Pedidos já existe um Enum do tipo Status que é referente ao Pedido, mas o atributo status da classe
+	PagamentoDto é outro. Então vamos criar o Enum StatusPagamento e depois atulizar a classe PagamentoDto para esse tipo, ficando assim:
+	
+		public enum StatusPagamento {
+			CRIADO,
+			CONFIRMADO,
+			CANCELADO,
+			CONFIRMADO_SEM_INTEGRACAO
+		}
+		
+		@Getter
+		@Setter
+		public class PagamentoDto {
+
+			private Long id;
+			private BigDecimal valor;
+			private String nome;
+			private String numero;
+			private String expiracao;
+			private String codigo;
+			private StatusPagamento status;
+			private Long pedidoId;
+			private Long formaDePagamentoId;
+		}
+
+	3) Agora vamos fazer algo que já fizemos no Producer, que é utilizar o Jackson2JsonMessageConverter. Nesse projeto ainda não temos uma classe	
+	de configuração para o RabbitMq, então devemos criar a classe PedidoAMQPConfiguration no pacote amqp. Nessa classe de configuração devemos
+	criar os 2 Beans, o do Jackson2JsonMessageConverter e RabbitTemplate (esse segundo é necessário para de fato passar a usar o Jackson2JsonMessageConverter).
+	Ficou assim:
+	
+		@Configuration
+		public class PedidoAMQPConfiguration {
+
+			@Bean
+			public Jackson2JsonMessageConverter messageConverter() {
+				return new Jackson2JsonMessageConverter();
+			}
+
+			@Bean
+			public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, Jackson2JsonMessageConverter messageConverter){
+				RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
+				rabbitTemplate.setMessageConverter(messageConverter);
+				return  rabbitTemplate;
+			}
+		}
+		
+	4) Agora vamos atualizar a classe PagamentoListener, é nela que a gente consome a fila e printa no console. Atualmente ela recebe um Message,
+	mas agora já é possível recebermos um PagamentoDto. Veja como a classe deve ficar:
+	
+		@Component
+		public class PagamentoListener {
+
+			//O argumento era Message, mas agora pode ser PagamentoDto
+			@RabbitListener(queues = "pagamento.concluido")
+			public void recebeMensagem(PagamentoDto pagamento){
+				String mensagem = """
+						Dados do pagamento: %s
+						Número do pedido: %s
+						Valor R$: %s
+						Status: %s
+						""".formatted(pagamento.getId(), pagamento.getPedidoId(), pagamento.getValor(), pagamento.getStatus());
+				
+				System.out.println("Recebi a mensagem: "+ mensagem);
+			}
+		}
+		
+	Tenha em mente que aqui apenas pegamos o objeto e printamos ele na tela, mas podíamos ter feito diversas coisas, por exemplo: Persistir um
+	Pagamento.
+			
+
+- Agora vamos falar sobre Exchanges.
+
+	- Lembre-se que Exchange é a camada que fica entre o Broker (RabbitMq) e o Producer, veja:
+
+		PUB ---> Exchange ---> Queue <--- SUB
+		
+	- O cenário que vamos criar para passar a usar a Exchange: O diretor do projeto passou uma nova demanda. Agora vai existir o Microserviço de 
+	Avaliação. Esse novo serviço precisa ser notificado quando ocorrer um novo pagamento, ele sabendo que houve um pagamento ele vai solicitar uma
+	avaliação ao Cliente que efetuou o pagamento.
+	
+	Nessa cenário o que queremos fazer na prática é: o MS de Avaliação ouvir também os eventos que estão na fila que já temos, no caso pagamento.concluido. 
+	Mas lembre-se, quando um evento é consumido o mesmo não fica mais na fila. Desse modo uma alternativa é criar uma segunda fila e o Publisher, no
+	caso Pagamentos, publicar nessas duas filas o mesmo evento, ou seja, teremos no código do PUB duas linhas que escrevem nas filas.
+	
+	Outra alternativa e a mais indicada é usando Exchange do tipo Fanout, nesse cenário ainda teremos que criar mais uma Fila (teremos duas), mas 
+	vamos ter apenas uma linha de código que faz a escrita na fila. A Fanout Exchange exige uma configuraçao, assim ela passa a escrever nas filas que
+	que queremos. Essa configuração chamamos de Binding (ligação). Veja uma ilustração:
+	
+	PUB ---> Fanout Exchange ---> Queue 1 <--- SUB 1
+							 `--> Queue 2 <--- SUB 2
+							 
+	Veja nesta ilustração que a Fanout Exchage escreve nas duas filas, pois há um Biding entre as filas e a Exchange, dessa forma toda mensagem que
+	chega na Exchange é repassada para todas as filas que ela tem ligação. Após isso as mensagens são consumidas pelos Sub's.
+	
+	Tenha em mente que a Fanout é ideal para quando queremos replicar um Evento. Um site legal é: http://tryrabbitmq.com/
+	Nesse site podemos criar graficamente a nossa "infra com RabbitMq", ou seja, podemos criar nele 1 Producer, 1 Fanout Exchange, 2 filas e
+	2 Consumidores. Ao dar Play veremos o comportamento/fluxo das mensagens (nesse caso a mensagem vai para as duas filas ao mesmo tempo).
+
+
+- Aqui vamos de fato implementar a Fanout Exchage:
+
+	1) Como já dito, vamos precisar de mais um MS, quer será o de Avaliação. Faça o download dele aqui: https://caelum-online-public.s3.amazonaws.com/2731-microsservices/03/avaliacao.zip
+	Nesse projeto já tem a implementação. Vamos ter que atualizar o MS de Pagamentos, pois ele vai escrever usando a Fanout Exchage;
+	
+	2) Abra o projeto Pagamentos e na classe PagamentoAMQPConfiguration vamos deletar o método criaFila(), pois quem vai criar a fila será o projeto
+	de Pedidos, ou seja, passamos a responsabilidade para o Consumidor;
+	
+	3) Na classe PagamentoAMQPConfiguration vamos criar mais um Bean, que será da Fanout Exchage. Veja:
+	
+		@Bean
+		public FanoutExchange fanoutExchange(){
+			return new FanoutExchange("pagamentos.ex");
+		}
+	
+	Com esse código teremos uma FanoutExchange com nome de pagamentos.ex;
+	
+	4) Agora o método cadastrar() da classe PagamentoController passará por uma mudança. Hoje a gente envia um evento passando o nome da fila,
+	vamos agora enviar utilizando o nome da Exchange (o método que recebe o nome da Exchage como argumento exige mais 2 argumentos, o routingKey
+	que vamos deixar vazio e o outro é o evento a ser escrito). Veja como ficou:
+	
+		@PostMapping
+		public ResponseEntity<PagamentoDto> cadastrar(@RequestBody @Valid PagamentoDto dto, UriComponentsBuilder uriBuilder) {
+			PagamentoDto pagamento = service.criarPagamento(dto);
+			URI endereco = uriBuilder.path("/pagamentos/{id}").buildAndExpand(pagamento.getId()).toUri();
+
+			template.convertAndSend("pagamentos.ex","", pagamento);
+
+			return ResponseEntity.created(endereco).body(pagamento);
+		}
+		
+	5) Abra o projeto de Pedidos;
+	
+	6) Na classe PedidoAMQPConfiguration vamos criar um Bean para criar a fila com nome: pagamentos.detalhes-pedido. Veja o código:
+	
+		@Bean
+		public Queue filaDetalhesPedido(){
+			return QueueBuilder
+					.nonDurable("pagamentos.detalhe-pedido")
+					.build();
+		}
+		
+	Mas lembre-se, quando queremos criar algo no RabbitMq Server, via aplicação é necessário ter o Bean do RabbitAdmin e um Bean para inicializar o
+	RabbitAdmin. Por esse motivo, devemos adicionar ainda:
+	
+		@Bean
+		public RabbitAdmin criaRabbitAdmin(ConnectionFactory conn) {
+			return new RabbitAdmin(conn);
+		}
+
+		@Bean
+		public ApplicationListener<ApplicationReadyEvent> inicializaAdmin(RabbitAdmin rabbitAdmin) {
+			return event -> rabbitAdmin.initialize();
+		}
+		
+	7) Ainda na classe PedidoAMQPConfiguration precisamos criar o vinculo (a ligação) entra a Fanout Exchage pagamento.ex com a fila 
+	pagamentos.detalhe-pedido. 
+	
+	Para isso teremos mais dois Bean's. O primeiro é como se fossemos criar novamente a FanoutExchange, mas na verdade
+	é apenas uma referência local (a prova disso é que no passo 3 a gente já criou a Fanout Exchage, nesse passo 3 já podiamos acessar o RabbitMq Server
+	e ver a ciração). O segundo Bean é a criação do vínculo (Binding) de fato entre a Fila e a Fanout Exchage. Veja o código desses Bean's:
+	
+		//Criando a referência local da FanoutExchange:
+		@Bean
+		public FanoutExchange fanoutExchange(){
+			return ExchangeBuilder
+					.fanoutExchange("pagamentos.ex")
+					.build();
+		}
+	
+	ATENÇÃO, Veja que esse código NÃO É igual que usamos no projeto Pagamento para criar a FanoutExchange.
+	
+		//Criando o Binding entre fila e Exchange:
+		@Bean
+		public Binding bindPagamentoPedido(FanoutExchange fanoutExchange){
+			return BindingBuilder
+					.bind(filaDetalhesPedido())
+					.to(fanoutExchange);
+		}
+	
+	ATENÇÃO, não usamos o nome da fila para vincular e sim o método que de fato cria a fila! Outra alternativa seria receber como argumento no metodo
+	bindPagamentoPedido(), no caso teriamos que receber um agumento do tipo Queue e o nome desse agumento teria que ser o nome do método que criou a 
+	fila, no caso filaDetalhesPedido (fizemos dessa maneira com a FanoutExchange)
+	E quanto a Exchange a gente pode fazer das duas maneiras também. No projeto avaliacao fizemos de outra maneira.
+	
+	8) Agora temos que atualizar a classe PagamentoListener, pois antes esse estava ouvindo a fila pagamento.concluido, mas agora deve ouvir
+	a fila pagamentos.detalhe-pedido. Veja como ficou o código:
+	
+		@Component
+		public class PagamentoListener {
+
+		//O argumento era Message, mas agora pode ser PagamentoDto
+		@RabbitListener(queues = "pagamentos.detalhe-pedido")
+		public void recebeMensagem(PagamentoDto pagamento){
+			String mensagem = """
+					Dados do pagamento: %s
+					Número do pedido: %s
+					Valor R$: %s
+					Status: %s
+					""".formatted(pagamento.getId(), pagamento.getPedidoId(), pagamento.getValor(), pagamento.getStatus());
+
+			System.out.println("Recebi a mensagem: "+ mensagem);
+		}
+	}
+	
+	9) Rode os programas e veja se as aplicações consumidoras (Avaliação e Pedidos) estão printando na tela.
+
+	
+- A seguir, veja o resumo dos tipos de Exchage feito pela professora:
+
+Como citei algumas vezes ao longo dos vídeos anteriores, uma mensagem nunca é enviada diretamente para uma fila, ela sempre é direcionada para uma exchange, que será responsável por encaminhar as mensagens para diversas filas que estiverem conectadas a ela. Quando fazemos o envio sem informar a exchange, o próprio RabbitMQ já utiliza uma exchange do tipo default por debaixo dos panos, como vimos na aula anterior.
+
+Quando optamos por informar a exchange, ao criá-la em nossa aplicação, temos algumas opções, que vou relembrar aqui:
+
+	- Direct: Esse tipo de exchange é usada, geralmente, quando desejamos enviar mensagens para um consumidor específico. Para isso, utilizamos uma routing key, que é uma chave enviada junto com a mensagem para que a exchange identifique qual a fila irá receber a mensagem.
+	
+	- Fanout: Quando enviamos uma mensagem para uma exchange desse tipo, ela vai ser enviada para todas as filas que estiverem ligadas a essa exchange. Ou seja, se existirem 30 filas ligadas a essa exchange, essas 30 filas receberão a mensagem. Para conectar uma fila a uma exchange é preciso criar um bind, que é uma relação (ou vínculo) entre uma fila e uma exchange. Nomeia-se como binding key essa chave de ligação entre a fila e a exchange.
+	- Headers: É um tipo muito menos usado, mas basicamente ignora o routing key e passa no próprio cabeçalho da mensagem para qual binding key deve ser encaminhada a mensagem.
+	
+	-Topic: A palavra-chave desse tipo de exchange é flexibilidade. Você pode nomear as binding keys de uma forma a criar padrões e/ou regras para que o envio seja de forma personalizada. Essas binding keys são descritas como se fossem expressões regulares. Dessa forma, podemos fazer composições para que mais de um consumidor receba as mensagens. Vou exemplificar abaixo:
+	
+	(Imagem estará no git, na pasta Aprendizado).
+
+	Suponha que eu tenha uma aplicação produtora, chamada pedido. E em um determinado momento seja necessário mandar mensagem para apenas dois consumidores: o estoque, para confirmar se tem os itens do pedido, e para o financeiro, para ver se o cliente desse pedido tem alguma pendência.
+	Num segundo momento, eu vou querer enviar uma mensagem para esses dois consumidores e mais um terceiro, que é o pagamento. Para isso, configurei as minhas binding keys da seguinte forma:
+	As binding keys da fila-estoque e da fila-financeiro com a exchange, configurei como pedido.*
+	Já a binding key da fila-pagamento com a exchange, configurei como *.pagamento
+	Caso o pedido envie uma mensagem com a routing key pedido.criado, por exemplo, tanto o estoque quanto o financeiro receberão a mensagem, pois a routing key se enquadra no padrão que foi definido na binding key.
+	Caso o pedido envie uma mensagem com a routing key pedido.pagamento, os três consumidores receberão a mensagem, pois o roteamento atende aos dois padrões.
+	Dessa forma, é possível compor e estabelecer padrões para definir envios com rotas diferenciadas, baseado em alguma situação específica que somente uns ou outros consumidores precisem receber as mensagens.
+
+Para melhor aproveitamento e performance no uso do RabbitMQ, é importante entender e modelar corretamente os tipos de exchanges para que se possa garantir uma comunicação eficiente entre os produtores e consumidores.

@@ -1,0 +1,200 @@
+- Nesse segundo capítulo falamos sobre o padrão Pub/Sub
+
+
+- O projeto utilizado nesse curso será o Alura Food (Server, Gateway, Pedidos e Pagamentos). É o projeto que fizemos no curso Microsserviços na 
+prática: implementando com Java e Spring. Podemos fazer o clone desse projeto aqui: https://github.com/alura-cursos/2731-mensageria-com-rabbitmq/tree/branch_inicial
+
+
+- O ambiente necessário para esse curso é:
+
+	- JDK 17;
+	- Maven;
+	- IntelliJ;
+	- Postman;
+	- Mysql;
+	- E o RabbitMQ (pode ser via Docker);
+	
+	
+- No primeiro capítulo vimos a parte Server do RabbitMQ, é a parte administrativa (controla as filas, exchanges, permissões...). Agora vamos ver a 
+parte Cliente (é a que envolve as aplicações de fato). Nesse primeiro momento vamos fazer o MS de Pagamentos publicar numa fila e o MS de Pedidos vai
+ler a mensagem da fila. Para começar, siga os passos:
+
+	1) Abra o projeto de Pagamentos;
+	
+	2) Neste projeto devemos adicionar no pom.xml a dependencia do AMQP do Spring:
+	
+		<dependency>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-starter-amqp</artifactId>
+		</dependency>
+		
+	3) Agora no arquivo application.properties devemos configurar o acesso ao RabbitMQ Server (muito similar com que fazemos com Banco de Dados):
+
+		spring.rabbitmq.host=localhost
+		spring.rabbitmq.port=5672
+		spring.rabbitmq.username=guest
+		spring.rabbitmq.password=guest
+		
+	4) Agora temos que criar uma classe que vai de fato linkar essa configuração que fizemos e outras com o RabbitMQ. Devemos criar a classe 
+	PagamentoAMQPConfiguration no pacote amqp e anotá-la com @Configuration para essa ser gerenciada pelo Spring (um Bean):
+	
+		@Configuration
+		public class PagamentoAMQPConfiguration {
+
+		}
+
+	5) Dentro da classe PagamentoAMQPConfiguration como foi dito, podemos linkar outras configurações com o RabbitMQ, vamos agora criar uma fila
+	ou seja, uma Queue. Para isso basta dentro dessa classe fazer:
+	
+		@Bean
+		public Queue criaFila(){
+		
+			return new Queue ("pagamento.concluido", false);
+		}
+		
+	Tenha em mente que os imports devem ser sempre de: org.springframework.amqp.core
+	
+	Com esse código criamos a fila com nome pagamento.concluido.  O atributo booleano indica se a fila deve ou não ser durável. (Tenha em mente	
+	que existe diversos construtores de Queue).
+	
+	Uma alternativa para se criar a fila, seria:
+	
+	    return QueueBuilder.nonDurable("pagamento.concluido").build();
+		
+	6) Para podermos fazer qualquer operação administrativa no RabbitMQ temos que criar um RabbitAdmin, lendo a documentação do RabbitMQ veremos
+	que existe dois construtores para o RabbitAdmin, um precisa de ConnectionFactory e outro precisa de RabbitTemplate. Aqui vamos usar o
+	ConnectionFactory, pois o outro é mais usado para enviar Mensagens (usaremos ele na Service ou Controller). O seguinte código deve estar dentro
+	da classe PagamentoAMQPConfiguration para criar o RabbitAdmin:
+	
+		@Bean
+		public RabbitAdmin criaRabbitAdmin(ConnectionFactory conn) {
+			return new RabbitAdmin(conn);
+		}
+		
+	7) Agora temos que configurar uma maneira para que quando a aplicação for levantada/rodada também ocorra a inicialização do RabbitMQ com essas
+	configurações. Para isso faça ainda na classe PagamentoAMQPConfiguration:
+	
+		@Bean
+		public ApplicationListener<ApplicationReadyEvent> inicializaAdmin(RabbitAdmin rabbitAdmin){
+			return event -> rabbitAdmin.initialize();
+		}
+	
+	O retorno desse método é ApplicationListener que é uma Functional Interface que dispara um evento.
+		
+	8) Esse passo é apenas para vermos como ficou a classe PagamentoAMQPConfiguration:
+
+		@Configuration
+		public class PagamentoAMQPConfiguration {
+
+			@Bean
+			public Queue criaFila(){
+				return new Queue ("pagamento.concluido", false);
+
+			}
+
+			@Bean
+			public RabbitAdmin criaRabbitAdmin(ConnectionFactory conn) {
+				return new RabbitAdmin(conn);
+			}
+
+			@Bean
+			public ApplicationListener<ApplicationReadyEvent> inicializaAdmin(RabbitAdmin rabbitAdmin){
+				return event -> rabbitAdmin.initialize();
+			}
+
+		}
+		
+	9) Ao rodarmos agora a aplicação, a fila deve ser criada. Podemos ver em http://localhost:15672/ se existe a fila pagamento.concluido
+	Como não definimos nada a exchange usada foi uma Default. Lembre-se de subir o Service Registry e o Gateway.
+	
+	10) A documentação do RabbitMQ que citamos no passo 6 encontra-se em: https://docs.spring.io/spring-amqp/docs/current/api/
+	
+	
+- Agora que já criamos uma Fila, vamos publicar uma mensagem nela. Siga os passos:
+
+	1) Vamos escrever uma mensagem na fila após criar um Pagamento. Então o código que escreve a mensagem vai ficar no método cadastrar da classe
+	PagamentoController. O objeto que sabe escrever no RabbitMQ é o RabbitTemplate. Na classe PagamentoController devemos criar o atributo:
+	
+		@Autowired
+		private RabbitTemplate template;
+		
+	2) Agora que nossa classe já tem um template, podemos usá-lo. O template tem diversos métodos para enviar uma mensagem (várias assinaturas).
+	Nesse momento vamos usar o método que tem routingKey e message como argumentos. O routingKey é o nome da fila e message é a menssagem que queremos
+	escrever e por esse mótivo temos que criar um objeto do tipo Message (do pacote amqp). Veja o trecho adicionado no método cadastrar de	
+	PagamentoController:
+	
+        Message message = new Message(("Criei o pagamento de ID: " + pagamento.getId()).getBytes());
+        template.send("pagamento.concluido", message);
+		
+	A message precisa que a mensagem que queremos escrever seja transformada em Bytes. Depois vamos mudar isso, mas nesse momento basta pegar a 
+	menssagem e usar o método getBytes().
+	
+	3) Para entender melhor, veja como ficou o método cadastrar da classe PagamentoController:
+	
+		@PostMapping
+		public ResponseEntity<PagamentoDto> cadastrar(@RequestBody @Valid PagamentoDto dto, UriComponentsBuilder uriBuilder) {
+			PagamentoDto pagamento = service.criarPagamento(dto);
+			URI endereco = uriBuilder.path("/pagamentos/{id}").buildAndExpand(pagamento.getId()).toUri();
+
+			Message message = new Message(("Criei o pagamento de ID: " + pagamento.getId()).getBytes());
+			template.send("pagamento.concluido", message);
+
+			return ResponseEntity.created(endereco).body(pagamento);
+		}
+		
+	Agora podemos cadastrar um pagamento, batendo em: @POST localhost:8082/pagamentos-ms/pagamentos 
+	Com o boddy:
+	
+		{
+		"valor": 500,
+		"nome": "Jacqueline",
+		"numero": "12345678",
+		"expiracao": "10/29",
+		"codigo": "123",
+		"pedidoId": 1,
+		"formaDePagamentoId": 1
+		}
+	
+	Cada pagamento criado deve gerar uma mensagem na fila que pode ser vista acessando: http://localhost:15672/ -> clicando no nome da fila ->
+	Indo na opção Get Message(s) e clicando no botão Get Message(s).
+	
+	
+- Agora que já tem mensagem na fila, podemos criar um Consumidor para elas. Com RabbitMQ um consumido é conhecido como SUB, que vem de Subscriber.
+Siga os passos para criar um Sub da fila pagamento.concluido:
+
+	1) O Sub será o nosso Microserviço de Pedidos. O primeiro passo é abri-lo. Após isso precisamos adicionar a dependencia no arquivo pom.xml:
+	
+		<dependency>
+			 <groupId>org.springframework.boot</groupId>
+			 <artifactId>spring-boot-starter-amqp</artifactId>
+		</dependency>
+	
+	Agora, basta configuramos o RabbitMQ nesse projeto, no caso devemos adicionar no application.properties:
+	
+		spring.rabbitmq.host=localhost
+		spring.rabbitmq.port=5672
+		spring.rabbitmq.username=guest
+		spring.rabbitmq.password=guest
+		
+		
+	2) Se para escrever na fila usamos o objeto da classe RabbitTemplate, para ler usaremos a RabbitListener, mas nesse caso vamos criar uma classe
+	que vai ter um método anotado com @RabbitListener. Essa classe se chamará PagamentoListener (pois o conteudo da fila é pagamento) e ficará no
+	pacote br.com.alurafood.pedidos.amqp
+	
+	O método do método que vamos criar será do tipo Message (lembre-se que o import deve ser do pacote amqp.core
+	
+	Veja como ficará:
+	
+		@Component
+		public class PagamentoListener {
+			
+			@RabbitListener(queues = "pagamento.concluido")
+			public void recebeMensagem(Message mensagem){
+				System.out.println("Recebi a mensagem: "+ mensagem.toString());
+			}
+		}
+		
+	Veja que na anotação eu indico através do atributo queues a fila que queremos ouvir.
+
+	3) Rode o programa e veja se será exibido no console as mensagens. Veja que fizemos de um jeito simples, posteriormente vamos melhorar a maneira
+	de escrever e ler mensagens!

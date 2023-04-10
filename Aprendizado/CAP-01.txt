@@ -1,0 +1,151 @@
+- Nesse primeiro capítulo falamos sobre a comunicação assíncrona.
+
+
+- O projeto utilizado nesse curso será o Alura Food. Lembre-se que nele até então usamos a comunicação Síncrona (utilizamos o Feign para isso). Veremos
+aqui as desvantagens desse tipo de comunicação e as vantagens de utilizar a comunicação assíncrona (aqui vamos usar o RabbitMQ);
+
+
+- Por que usar mensageria (comunicação assíncrona)? Para responder isso temos que entender a diferença entre os dois tipos de comunicação (Síncrona e
+Assíncrona). A primeira é como se fosse uma conversa via telefone, onde há duas pessoas (uma tá falando e outra ouvindo), mas a resposta do ouvinte vem logo
+após o outro terminar de falar/comentar/perguntar, ou seja, é quase que ao mesmo tempo (imediata). Na comunicação assíncrona podemos pensar na conversa entre
+duas pessoas via whatsapp, ou seja, a resposta pode demorar, não é ao mesmo tempo (uma pessoa envia a mensagem e vai fazer outra coisa).
+
+No Alura Food o MS de Pagamentos conversa com o de Pedidos via Feign, aqui o tipo é Síncrona, pois Pagamentos fica esperando a resposta do Pedidos, só 
+após a resposta que o MS de Pagamentos vai fazer outra coisa, inclusive tivemos que utilizar o Circuit Braker para termos um fallback caso o MS de Pedidos
+estivesse fora do ar.
+
+Ao ocorrer o Fallback temos o primeiro problema do tipo de comunicação síncrona que é a transferência de responsabilidade, pois quando isso ocorre o status
+do pagamento ia para CONFIRMADO_SEM_INTEGRACAO, com isso o MS de Pagamentos passou a ter a responsabilidade de sempre verificar os pedidos com esse status
+e tentar periodicamente informar o MS de Pedidos que o mesmo já havia sido pago (o MS de Pagamento ganha uma responsabilidade que foge do escopo da regra de 
+negócio).
+
+Outro problema é que a conversa entre esses dois MS's é direta e isso implica num acoplamento, pois hoje para o negócio funcionar o MS de Pagamentos tem que
+conversar com MS de Pedidos, e se futuramente eu quiser mudar isso, ou seja, agora o MS de Administração é que tem que saber se o pagamento ocorreu, o que
+teremos que fazer? Teremos que mexer no MS de Pagamentos, devido o acoplamento que existe hoje.
+
+A alternativa é utilizar um Broker de mensagem. Aqui vamos usar o RabbitMQ. Com isso haverá uma camada entre os MS's que se conversam, ou seja, MS de
+Pagamentos vai mandar a mensagem para essa camada e o MS de Pedidos vai buscar a mensagem nessa camada extra. (Tenha em mente que a camada extra é o Broker,ou seja, o RabbitMQ).
+
+Outra vantagem do Broker é que ele permite que haja conversa de MS's de diferentes linguagens!
+
+
+- Vamos falar sobre o RabbitMQ:
+
+	- Sua documentação oficial encontra-se em: https://www.rabbitmq.com/ e seu GIT: https://github.com/rabbitmq
+
+	- Ele é um Broker de mensagem, é a camada extra que fica entre os MS's que estão conversando;
+
+	- Ele é Open Source, com suporte e plugins em várias linguagens;
+
+	- Ele é do tipo Cliente-Servidor. Servidor é o administrador do RabbitMQ e os clientes são as aplicações que serão as que escreve ou consome a 
+	mensagem;
+
+	- Ele suporta vários protocolos (HTTP, MQTT, STOMP), mas seu principal é o AMQP, pois esse é um protocolo moderno e avançado para enfileiramento de
+	mensagens (é baseado no TCP).
+
+	- Ele utiliza o padrão PUB/SUB (Publish/Subscribe). PUB é quem escreve a mensagem e SUB é quem vai consumir. Temos que pensar que o SUB é um 
+	assinante de uma fila, ele passará a consumir todas as mensagens que lá chegar;
+
+	- A fila é onde as mensagens ficam e é comum falarmos seu nome em ingles, ou seja, Queue. Podemos fazer muitas configurações em uma fila;
+
+	- As filas são por padrão do tipo FIFO (First in first out), ou seja, a primeira mensagem que chega nela é a primeira que sairá;
+
+	- Não é comum o PUB publicar uma mensagem diretamente na Queue (ao usar o AMQP isso passa a ser mais rígido, pois passa a ser impossível!). Entre o PUB e a Queue há o Exchange (trocador), esse é responsável por pegar a mensagem, analisá-la, processá-la e colocá-la em uma fila. 
+	Há diversos tipos de Exchange e não vamos conseguir nesse curso usar todos. Veja alguns tipos de Exchange:
+
+		- Default (padrão): Nesse tipo devemos criar a mensagem e precisamos apenas informar o nome da fila em que queremos publicá-la, nem precisamos
+		especificar uma Exchange;
+
+		- Direct: Nesse tipo de Exchange precisamos configurar a Routing Key. Esse atributo vai indicar para quais Filas as mensagens devem ir. 
+		Dessa forma a Exchage passa a ser específica para uma ou mais filas, ou seja, toda mensagem que passar por ela já tem o destino configurado. 
+		Esse faz uso do algorítmo Round-robin e os consumidores (SUB) dessa Exchange vão receber as mensagens de forma balanceada (cada mensagem vai 
+		para uma instância diferente);
+
+		- Fanout: Nesse tipo de Exchange precisamos configurar a Binding Key. Aqui as mensagens vão para todas as filas que estão vinculadas ao Biding
+		Key em questão;
+
+		- Topic: É um tipo avançado, podemos fazer diversas configurações/regras para determinar para onde a mensagem vai;
+
+		- Header: É a menos usada, o destino da mensagem é configurado no cabeçalho;
+
+	Não se preocupe, vamos enter melhor ao programar! O importante de saber até aqui é que au usarmos RabbitMQ com AMQP teremos:
+
+	PUB ---> Exchange ---> Queue <--- SUB
+
+
+- Sobre os protocolos:
+
+	- Vamos utilizar o AMQP, pois o Spring traz diversas facilidades para utilizarmos ele. Esse torna obrigatório o uso de uma Exchange. Como ele temos:
+	enfileiramento confiável de mensagens, roteamento flexível, transações, segurança e interoperabilidade.
+
+	- MQTT: É utilizado em ambientes com restrição de Hardware e/ou rede. Utilizado em mobile e em IoT.
+
+	- STOMP: É baseado em texto e foi feito para trabalhar com middlewares orientados à mensagem. Sua estrutura é similar ao AMQP (cabeçalho, 
+	propriedades, corpo da mensagem). Mas esse não faz uso de tópicos ou filas.
+
+
+- Agora vamos peparar nosso ambiente para utilizar o RabbitMQ:
+
+	- Como já citado, o RabbitMQ é dividido em duas partes:
+
+		I) Servidor: é quem recebe as mensagens, processa e encaminha elas para as filas;
+
+		II) Cliente: é o que utilizamos na nossa aplicação, é as libs/dependências que colocamos em nosso projeto para publicar ou ler uma mensagem;
+
+	- Vamos nesse momento falar somente do Servidor. Vamos ver como utilizá-lo:
+
+		O site oficial do RabbitMQ é: https://www.rabbitmq.com/
+
+		Para subir um servidor do RabbitMQ podemos fazer o Download através do: https://www.rabbitmq.com/download.html
+		Mas nesse mesmo site, já há um comando que cria um Container Docker do RabbitMQ, que no caso é:
+
+			docker run -it --rm --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3.11-management
+
+		Podemos rodar esse comando em um terminal, que já teremos um Servidor de RabbitMQ rodando! Agora basta acessar: localhost:15672 
+		O username e password padrão é: guest
+	
+		Veja que temos diversas abas, em todas estamos com 0, exceto as Exchanges que já temos algumas opções que podemos usar.
+
+		Temos a aba de Queue (fila), ou seja, através do Servidor podemos criar e configurar uma fila. Alem disso, podemos ainda publicar nela
+		através do Server. Tenha em mente que no Cliente também conseguimos criar/configurar uma fila (vamos dessa forma);
+
+		No botão add (adiciona argumentos) é onde podemos configurar uma Fila. Veja algumas explicações sobre esses argumentos:
+
+			Auto expire = Ao ter uma fila parada, sem ninguém mandar nada, posso determinar aqui um tempo para expirar essa fila e assim a fila não
+			poderá receber mais mensagens;
+
+			Message TTL = Determino um tempo para deletar uma mensagem que não foi consumida por ninguém; 
+
+			Overflow Behaviour = Uma fila pode ter tamanho (em Bytes ou quantidade de mensagens) e nesse parâmetro vou determinar como tratar ao chegar no limite do tamanho da fila, por exemplo: deleto mensagens mais antiga; informo ao publicador que não foi possível publicar
+			sua mensagem; entre outros...
+			
+			Max lenght = Determina o tamanho máximo de mensagens da fila (através da quantidade de mensagens);
+
+			Max lenght bytes = Determina o tamanho máximo de mensagens da fila (através da quantidade de bytes);
+
+		Fora do botão do add tem outras configurações da fila:
+
+			Name = nome que vou dar para fila;
+
+			Durability = indico se a fila será salva (persistida) após desligar o Broker (servidor);
+			
+			Auto delete = Uma fila que não tem consumidor (SUB), pode ser apagada? Se eu quiser que seja, basta configurar aqui com Yes.
+
+			
+- A professora forneceu um docker-compose para subirmos o RabbitMQ:
+
+            version: "3.6"
+
+            services:
+                rabbitmq:
+                    image: rabbitmq:3.10-management
+                    container_name: rabbitmq
+                    restart: always
+                    ports:
+                        - 5672:5672
+                        - 15672:15672
+                    volumes:
+                        - ./dados:/var/lib/rabbitmq/
+                    environment:
+                        - RABBITMQ_DEFAULT_USER=jacqueline
+                        - RABBITMQ_DEFAULT_PASS=alura

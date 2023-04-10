@@ -1,0 +1,45 @@
+Vi que há duas maneiras de se criar uma Exchange, então fiz essa pergunta no forum:
+
+Olá, pessoal! Tudo bem com vocês?
+
+Gostaria de entender por qual motivo foi necessário utilizar esses dois trechos para criar a Fanout Exchange:
+
+Trecho no projeto de Pagamentos:
+
+    @Bean
+    public FanoutExchange fanoutExchange(){
+        return new FanoutExchange("pagamentos.ex");
+    }
+	
+Trecho no projeto de Pedidos:
+
+    @Bean
+    public FanoutExchange fanoutExchange(){
+        return ExchangeBuilder
+                .fanoutExchange("pagamentos.ex")
+                .build();
+    }
+	
+Minha dúvida surgiu após criar a Exchange para a DLQ, pois nesse caso só foi necessário um único código (igual que utilizamos no projeto Pedidos).
+
+Apaguei o trecho do projeto de Pagamentos (deixei apenas em Pedidos) e aparentemente tudo continua funcionando. Mas como esse assunto é novo para mim, queria saber se há alguma necessidade ou vantagem de utilizar os dois trechos?
+
+Desde já, agradeço.
+
+E a resposta foi:
+
+Olá, Rodrigo! Tudo bem e com você?
+
+Ótima pergunta! A diferença entre os dois trechos está na forma como a Fanout Exchange é criada. No primeiro trecho, a Exchange é criada diretamente com o construtor new FanoutExchange("pagamentos.ex"), enquanto no segundo trecho, é utilizada a classe ExchangeBuilder para criar a Exchange.
+
+A vantagem de utilizar a classe ExchangeBuilder é que ela permite configurar a Exchange de forma mais detalhada, como por exemplo, definir políticas de mensagens, argumentos e outros parâmetros. Já no primeiro trecho, a Exchange é criada de forma mais simples e direta.
+
+No seu caso específico, se você não está utilizando nenhuma configuração adicional na Exchange, pode manter apenas o trecho do projeto Pedidos sem problemas. Mas se houver necessidade de configurar a Exchange, o trecho do projeto Pagamentos pode ser útil.
+
+Espero ter ajudado e bons estudos!
+
+
+Testes feitos por mim: 
+
+	Não há necessidade dos dois trechos existirem ao mesmo tempo, apenas o da classe Pedidos vai funcionar (ele é necessário devido ao Biding com a Fila).
+	Mas o código da classe Pedidos pode ser usando ExchangeBuilder ou então construtor (qualquer um dos dois trechos pode ser escrito no projeto Pedidos).
